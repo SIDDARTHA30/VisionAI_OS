@@ -28,3 +28,38 @@ class ExecutionNotFoundError(AutomationError):
 class TaskNotFoundError(AutomationError):
     """Raised when a task is missing or access is denied."""
     pass
+
+
+class PlannerLLMError(AutomationError):
+    """Raised when the LLM provider fails to generate a response."""
+    pass
+
+
+class PlannerTimeoutError(PlannerLLMError):
+    """Raised when plan generation fails to complete within limits."""
+    pass
+
+
+class PlannerValidationError(AutomationError):
+    """Raised when the generated plan violates schemas or validation rules."""
+    pass
+
+
+class PlannerRetryExceeded(PlannerValidationError):
+    """Raised when prompt correction retry attempts are exhausted."""
+    pass
+
+
+class PlannerDependencyError(PlannerValidationError):
+    """Raised when plan steps have invalid or circular dependencies."""
+    pass
+
+
+class PlannerContextError(AutomationError):
+    """Raised when conversation history or context fails to build."""
+    pass
+
+
+class PlannerPromptError(AutomationError):
+    """Raised when prompt formatting template injection crashes."""
+    pass

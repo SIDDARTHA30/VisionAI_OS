@@ -42,12 +42,12 @@ VALID_TRANSITIONS: Dict[TaskStatus, List[TaskStatus]] = {
     TaskStatus.VALIDATING: [TaskStatus.GOAL_ANALYSIS, TaskStatus.FAILED, TaskStatus.CANCELLED],
     TaskStatus.GOAL_ANALYSIS: [TaskStatus.PLANNING, TaskStatus.FAILED, TaskStatus.CANCELLED],
     TaskStatus.PLANNING: [TaskStatus.PLAN_READY, TaskStatus.FAILED, TaskStatus.CANCELLED],
-    TaskStatus.PLAN_READY: [TaskStatus.QUEUED, TaskStatus.CANCELLED],
+    TaskStatus.PLAN_READY: [TaskStatus.QUEUED, TaskStatus.CANCELLED, TaskStatus.PLANNING],
     TaskStatus.QUEUED: [TaskStatus.EXECUTING, TaskStatus.CANCELLED],
     TaskStatus.EXECUTING: [TaskStatus.WAITING_APPROVAL, TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED],
     TaskStatus.WAITING_APPROVAL: [TaskStatus.EXECUTING, TaskStatus.CANCELLED, TaskStatus.FAILED],
     TaskStatus.RETRYING: [TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.CANCELLED],
-    TaskStatus.FAILED: [TaskStatus.RETRYING, TaskStatus.CANCELLED],
+    TaskStatus.FAILED: [TaskStatus.RETRYING, TaskStatus.CANCELLED, TaskStatus.VALIDATING],
     TaskStatus.COMPLETED: [],
     TaskStatus.CANCELLED: [],
 }
@@ -85,6 +85,9 @@ class Plan(Base):
     estimated_cost = Column(Float, default=0.0, nullable=False)
     estimated_duration_sec = Column(Integer, default=0, nullable=False)
     version = Column(Integer, default=1, nullable=False)
+    plan_version = Column(Integer, default=1, nullable=False)
+    is_latest = Column(Boolean, default=True, nullable=False)
+    parent_plan_id = Column(Uuid(as_uuid=True), ForeignKey("plans.id", ondelete="SET NULL"), nullable=True)
     __mapper_args__ = {"version_id_col": version}
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
@@ -106,6 +109,7 @@ class PlanStep(Base):
     input_arguments = Column(JSON, default=dict, nullable=False)
     status = Column(String(50), default="PENDING", nullable=False, index=True)  # PENDING, EXECUTING, COMPLETED, FAILED, SKIPPED, CANCELLED
     approval_required = Column(Boolean, default=False, nullable=False)
+    depends_on = Column(JSON, default=list, nullable=True)
     error_message = Column(Text, nullable=True)
     result_output = Column(JSON, nullable=True)
     version = Column(Integer, default=1, nullable=False)

@@ -51,9 +51,19 @@ class Settings(BaseSettings):
     TTS_DEFAULT_VOICE: str = "Kore"
     TTS_MODEL: str = "gemini-2.5-flash-preview-tts"
 
+    # Module 4 — Automation Execution Engine Policy
+    AUTOMATION_MAX_PARALLEL_STEPS: int = 4
+    AUTOMATION_DEFAULT_TIMEOUT_SEC: int = 60
+    AUTOMATION_MAX_RETRIES: int = 3
+    AUTOMATION_BACKOFF_FACTOR: float = 2.0
+    AUTOMATION_QUEUE_SIZE: int = 100
+
+
     # Configuration source
     model_config = SettingsConfigDict(
-        env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"),
+        env_file=os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), ".env"
+        ),
         env_file_encoding="utf-8",
         extra="ignore"
     )

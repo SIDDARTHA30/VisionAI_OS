@@ -254,51 +254,7 @@ async def test_automation_api_endpoints(db_session: AsyncSession):
         assert retry_res.json()["data"]["status"] == "RETRYING"
 
 
-# ─── 4. Tool Registry Unit Tests ─────────────────────────────────────────────
-
-from app.tools.base_tool import BaseTool
-from app.tools.registry import tool_registry
-from pydantic import BaseModel
-
-class DummyInput(BaseModel):
-    arg1: str
-
-class DummyOutput(BaseModel):
-    result: str
-
-class MockBrowserTool(BaseTool):
-    @property
-    def name(self) -> str:
-        return "BrowserTool"
-    @property
-    def description(self) -> str:
-        return "Simulated browser tool"
-    @property
-    def version(self) -> str:
-        return "1.0.0"
-    @property
-    def input_schema(self) -> BaseModel:
-        return DummyInput
-    @property
-    def output_schema(self) -> BaseModel:
-        return DummyOutput
-    def validate(self, arguments: dict) -> bool:
-        return "arg1" in arguments
-    async def execute(self, arguments: dict) -> dict:
-        return {"result": "success"}
-    async def cleanup(self) -> None:
-        pass
-    async def health_check(self) -> bool:
-        return True
-
-    def test_register_and_retrieve_extensible_tools(self):
-        tool = MockBrowserTool()
-        tool_registry.register(tool)
-        
-        retrieved = tool_registry.get("BrowserTool")
-        assert retrieved.name == "BrowserTool"
-        assert retrieved.validate({"arg1": "test"}) is True
-        assert "browsertool" in tool_registry.list_tools()
+# Section 4. Tool Registry tests migrated to test_tools_framework.py
 
 
 # ─── 5. Refactoring & Stabilization Verification Tests ─────────────────────
@@ -339,40 +295,7 @@ class TestStabilizationAndRefactoring:
         )
         assert res_update is None
         
-    async def test_tool_session_lifecycle(self, db_session: AsyncSession):
-        from app.tools.manager import ToolManager
-        from app.tools.base_tool import BaseTool
-        
-        # Create a mock tool that tracks cleanup
-        class StatefulTool(BaseTool):
-            cleanup_called = False
-            @property
-            def name(self) -> str: return "StatefulTool"
-            @property
-            def description(self) -> str: return "Stateful"
-            @property
-            def version(self) -> str: return "1.0.0"
-            @property
-            def input_schema(self): return DummyInput
-            @property
-            def output_schema(self): return DummyOutput
-            def validate(self, arguments: dict): return True
-            async def execute(self, arguments: dict): return {"result": "ok"}
-            async def cleanup(self): self.cleanup_called = True
-            async def health_check(self): return True
-            
-        tool = StatefulTool()
-        tool_registry.register(tool)
-        
-        manager = ToolManager()
-        # Execute tool should NOT call cleanup immediately!
-        res = await manager.execute_tool("StatefulTool", {"arg1": "test"})
-        assert res["result"] == "ok"
-        assert tool.cleanup_called is False
-        
-        # Explicit cleanup should set state to True
-        await manager.cleanup_tool("StatefulTool")
-        assert tool.cleanup_called is True
+        # Lifecycle tests migrated to test_tools_framework.py
 
     async def test_retry_during_execution_raises_error(self, db_session: AsyncSession):
         task_service = TaskService()

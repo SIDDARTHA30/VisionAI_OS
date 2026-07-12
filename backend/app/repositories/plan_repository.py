@@ -1,96 +1,83 @@
 import uuid
-from typing import Any, Dict, Optional
-from sqlalchemy import select, update, func
+import logging
+from typing import List, Optional
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from app.models.automation import Plan, PlanStep
+
+logger = logging.getLogger(__name__)
 
 
 class PlanRepository:
-    """Repository for pure database operations on Plan and PlanStep models."""
+    """
+    Repository for Plan and PlanStep models.
+    Enforces isolation, version history updates, and latest flag checks.
+    """
 
-    async def create(
+    async def get_by_id(self, db: AsyncSession, plan_id: uuid.UUID) -> Optional[Plan]:
+        """Fetch a specific execution plan by its ID."""
+        stmt = select(Plan).where(Plan.id == plan_id)
+        res = await db.execute(stmt)
+        return res.scalars().first()
+
+    async def create_plan_and_steps(
         self,
         db: AsyncSession,
         task_id: uuid.UUID,
-        summary: Optional[str],
+        summary: str,
+        steps_list: List[dict],
         estimated_cost: float = 0.0,
-        estimated_duration_sec: int = 0
+        estimated_duration_sec: int = 0,
+        parent_plan_id: Optional[uuid.UUID] = None
     ) -> Plan:
-        plan = Plan(
+        """
+        Creates a new plan and associated plan steps.
+        Automatically increments the task's plan version history, marks older plans
+        as is_latest=False, and saves the new plan as is_latest=True.
+        """
+        # 1. Deactivate older plans for the same task
+        deactivate_stmt = (
+            update(Plan)
+            .where(Plan.task_id == task_id, Plan.is_latest == True)
+            .values(is_latest=False)
+        )
+        await db.execute(deactivate_stmt)
+
+        # 2. Compute version number increments
+        version_stmt = select(Plan).where(Plan.task_id == task_id)
+        res = await db.execute(version_stmt)
+        existing_plans = res.scalars().all()
+        next_version = len(existing_plans) + 1
+
+        # 3. Insert new plan
+        new_plan = Plan(
             task_id=task_id,
             summary=summary,
             estimated_cost=estimated_cost,
             estimated_duration_sec=estimated_duration_sec,
-            version=1
+            plan_version=next_version,
+            is_latest=True,
+            parent_plan_id=parent_plan_id
         )
-        db.add(plan)
-        await db.flush()
-        return plan
+        db.add(new_plan)
+        await db.flush()  # Populates new_plan.id
 
-    async def get_by_id(
-        self,
-        db: AsyncSession,
-        plan_id: uuid.UUID
-    ) -> Optional[Plan]:
-        stmt = (
-            select(Plan)
-            .where(Plan.id == plan_id)
-            .options(
-                selectinload(Plan.steps),
-                selectinload(Plan.executions)
+        # 4. Insert steps
+        for step in steps_list:
+            raw_id = step.get("step_id")
+            step_id = uuid.UUID(raw_id) if isinstance(raw_id, str) else (raw_id or uuid.uuid4())
+            new_step = PlanStep(
+                id=step_id,
+                plan_id=new_plan.id,
+                step_number=step["step_number"],
+                tool_name=step["tool_name"],
+                input_arguments=step["input_arguments"],
+                approval_required=step["approval_required"],
+                depends_on=step.get("depends_on") or [],
+                status="PENDING"
             )
-        )
-        res = await db.execute(stmt)
-        return res.scalars().first()
+            db.add(new_step)
 
-    async def create_step(
-        self,
-        db: AsyncSession,
-        plan_id: uuid.UUID,
-        step_number: int,
-        tool_name: str,
-        input_arguments: Dict[str, Any],
-        approval_required: bool = False
-    ) -> PlanStep:
-        step = PlanStep(
-            plan_id=plan_id,
-            step_number=step_number,
-            tool_name=tool_name,
-            input_arguments=input_arguments,
-            approval_required=approval_required,
-            status="PENDING",
-            version=1
-        )
-        db.add(step)
         await db.flush()
-        return step
-
-    async def update_step_status(
-        self,
-        db: AsyncSession,
-        step_id: uuid.UUID,
-        status: str,
-        expected_version: int,
-        result_output: Optional[Dict[str, Any]] = None,
-        error_message: Optional[str] = None
-    ) -> Optional[PlanStep]:
-        values = {
-            "status": status,
-            "version": PlanStep.version + 1,
-            "updated_at": func.now()
-        }
-        if result_output is not None:
-            values["result_output"] = result_output
-        if error_message is not None:
-            values["error_message"] = error_message
-
-        stmt = (
-            update(PlanStep)
-            .where(PlanStep.id == step_id, PlanStep.version == expected_version)
-            .values(**values)
-            .returning(PlanStep)
-        )
-        res = await db.execute(stmt)
-        return res.scalars().first()
+        logger.info(f"Successfully saved Plan {new_plan.id} v{new_plan.plan_version} with {len(steps_list)} steps.")
+        return new_plan

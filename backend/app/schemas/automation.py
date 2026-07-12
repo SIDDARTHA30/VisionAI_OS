@@ -67,6 +67,7 @@ class PlanStepResponse(BaseModel):
     input_arguments: Dict[str, Any]
     status: str
     approval_required: bool
+    depends_on: List[int] = []
     error_message: Optional[str] = None
     result_output: Optional[Dict[str, Any]] = None
     created_at: datetime
@@ -100,6 +101,9 @@ class PlanResponse(BaseModel):
     summary: Optional[str] = None
     estimated_cost: float
     estimated_duration_sec: int
+    plan_version: int
+    is_latest: bool
+    parent_plan_id: Optional[uuid.UUID] = None
     created_at: datetime
     updated_at: datetime
     steps: List[PlanStepResponse] = []
@@ -107,6 +111,67 @@ class PlanResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ─── Milestone 4.3: Planner Schemas & Validations ───
+
+from app.tools.enums import ToolCategory, ToolCapability, PermissionLevel
+
+
+class PlanStepCreate(BaseModel):
+    step_id: Optional[uuid.UUID] = None
+    step_number: int
+    tool_name: str
+    input_arguments: Dict[str, Any]
+    approval_required: bool
+    depends_on: List[int] = []
+
+
+class PlanCreate(BaseModel):
+    summary: str
+    confidence_score: float = 1.0
+    steps: List[PlanStepCreate]
+
+
+class PlannerMetadata(BaseModel):
+    planner_version: str = "1.0.0"
+    prompt_version: str = "1.0.0"
+    model_version: str = "gemini-2.5-flash"
+    confidence_score: float
+    planning_model: str
+    generation_time_ms: int
+    tokens_used: int
+
+
+class PlannerMetrics(BaseModel):
+    planning_duration_ms: int
+    llm_latency_ms: int
+    validation_duration_ms: int
+    retries: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+class PlanningContext(BaseModel):
+    conversation_summary: Optional[str] = None
+    user_preferences: Dict[str, Any] = {}
+    previous_failed_plans: List[uuid.UUID] = []
+    available_tools: List[str] = []
+    uploaded_files: List[uuid.UUID] = []
+
+
+class PlannerAuditLog(BaseModel):
+    request_id: uuid.UUID
+    task_id: uuid.UUID
+    plan_id: Optional[uuid.UUID] = None
+    latency_ms: int
+    model: str
+    retries: int
+    prompt_tokens: int
+    completion_tokens: int
+    status: str
+    audit_steps: List[str] = []
 
 
 class TaskCreate(BaseModel):

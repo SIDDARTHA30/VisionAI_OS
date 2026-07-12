@@ -122,6 +122,7 @@ async def http_exception_handler(request, exc: HTTPException):
         content={
             "success": False,
             "message": exc.detail,
+            "detail": exc.detail,
             "data": None
         }
     )

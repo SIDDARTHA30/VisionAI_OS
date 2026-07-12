@@ -1,9 +1,15 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+from typing import List, Optional
+from pydantic import BaseModel, ConfigDict
 
 
-class ToolDefinition(BaseModel):
-    """Schema defining a tool for model discovery."""
-    name: str
-    description: str
-    input_schema: dict
-    output_schema: dict
+class ToolHealth(BaseModel):
+    status: str  # HEALTHY, UNHEALTHY, DEGRADED
+    message: Optional[str] = None
+    dependencies: List[str] = []
+    latency_ms: int
+    last_checked: datetime
+
+    model_config = ConfigDict(
+        validate_assignment=True
+    )
